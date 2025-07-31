@@ -5,18 +5,62 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Interactive Paver Planner</title>
   <style>
-    body { font-family: sans-serif; text-align: center; padding: 10px; margin: 0; }
-    canvas { 
-      border: 2px solid #333; 
-      background: #eee; 
-      width: 100%; 
-      height: auto; 
+    body { font-family: sans-serif; margin: 0; padding: 0; background: #fafafa; }
+    h2, h3 { margin: 10px 0; text-align: center; }
+    #canvasWrapper {
+      overflow: hidden;
+      touch-action: none;
+      width: 100%;
+      height: 65vh;
+      position: relative;
+    }
+    canvas {
+      border: 2px solid #333;
+      background: #eee;
+      position: absolute;
+      left: 0; top: 0;
+      transform-origin: 0 0;
       touch-action: none;
     }
-    #controls { display: flex; flex-wrap: wrap; justify-content: center; margin-top: 10px; gap: 10px; }
-    button, label { padding: 10px; font-size: 14px; flex: 1 1 140px; }
-    #colorPicker { width: 100%; height: 40px; border: none; margin-top: 5px; cursor: pointer; }
-    .color-group { display: flex; flex-direction: column; align-items: center; flex: 1 1 140px; }
+    #controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      padding: 10px;
+      gap: 10px;
+    }
+    button, label {
+      padding: 15px;
+      font-size: 16px;
+      flex: 1 1 140px;
+      border: none;
+      border-radius: 6px;
+      background: #444;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #666;
+    }
+    #colorPicker {
+      width: 100%;
+      height: 40px;
+      border: none;
+      margin-top: 5px;
+      cursor: pointer;
+    }
+    .color-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1 1 140px;
+    }
+    @media (max-width: 600px) {
+      #controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
   </style>
 </head>
 <body>
@@ -24,7 +68,9 @@
   <h3>DIRT PROS OF NORTH FLORIDA</h3>
   <h2>Mark Where You Want the Pavers Installed</h2>
 
-  <canvas id="canvas"></canvas>
+  <div id="canvasWrapper">
+    <canvas id="canvas" width="800" height="600"></canvas>
+  </div>
 
   <div id="controls">
     <button onclick="setMode('line')">Draw Line</button>
@@ -45,23 +91,21 @@
     const colorPicker = document.getElementById('colorPicker');
     let mode = 'none', drawing = false, startX, startY;
     let currentFreeform = [], shapes = [];
+
+    // Zoom/Pan control
+    let scale = 1;
+    let originX = 0, originY = 0;
+    let lastTouches = [];
+    let isPanning = false;
+
     const img = new Image();
-
-    // Load and resize canvas
-    function resizeCanvas() {
-      const ratio = img.width / img.height;
-      canvas.width = canvas.clientWidth;
-      canvas.height = canvas.width / ratio;
-      redraw();
-    }
-
-    img.onload = () => {
-      resizeCanvas();
-    };
-
     img.src = "https://dirtpros.github.io/tool/yard.jpg";
 
-    window.addEventListener("resize", resizeCanvas);
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      redraw();
+    };
 
     function setMode(m) {
       mode = m;
@@ -71,13 +115,13 @@
       const rect = canvas.getBoundingClientRect();
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      const x = (clientX - rect.left) * (canvas.width / rect.width);
-      const y = (clientY - rect.top) * (canvas.height / rect.height);
+      const x = (clientX - rect.left - originX) / scale;
+      const y = (clientY - rect.top - originY) / scale;
       return { x, y };
     }
 
     function startDraw(e) {
-      if (mode === 'none') return;
+      if (mode === 'none' || (e.touches && e.touches.length > 1)) return;
       drawing = true;
       const p = getCanvasPos(e);
       startX = p.x; startY = p.y;
@@ -85,8 +129,13 @@
     }
 
     function moveDraw(e) {
-      if (!drawing) return;
+      if (!drawing || (e.touches && e.touches.length > 1)) return;
       const p = getCanvasPos(e);
+
+      redraw(); // redraw previous shapes
+
+      ctx.strokeStyle = colorPicker.value;
+      ctx.lineWidth = 2;
 
       if (mode === 'free') {
         currentFreeform.push({ x: p.x, y: p.y });
@@ -94,21 +143,14 @@
         const ps = currentFreeform;
         ctx.moveTo(ps[ps.length - 2].x, ps[ps.length - 2].y);
         ctx.lineTo(p.x, p.y);
-        ctx.strokeStyle = colorPicker.value;
-        ctx.lineWidth = 2;
         ctx.stroke();
-      } else {
-        redraw();
-        ctx.strokeStyle = colorPicker.value;
-        ctx.lineWidth = 2;
-        if (mode === 'line') {
-          ctx.beginPath();
-          ctx.moveTo(startX, startY);
-          ctx.lineTo(p.x, p.y);
-          ctx.stroke();
-        } else if (mode === 'rect') {
-          ctx.strokeRect(startX, startY, p.x - startX, p.y - startY);
-        }
+      } else if (mode === 'line') {
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      } else if (mode === 'rect') {
+        ctx.strokeRect(startX, startY, p.x - startX, p.y - startY);
       }
     }
 
@@ -127,7 +169,8 @@
     }
 
     function redraw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.setTransform(scale, 0, 0, scale, originX, originY);
+      ctx.clearRect(-originX / scale, -originY / scale, canvas.width / scale, canvas.height / scale);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       shapes.forEach(s => {
         ctx.strokeStyle = s.color;
@@ -153,23 +196,57 @@
     }
 
     function saveImage() {
+      ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+      redraw();
       const a = document.createElement('a');
       a.download = 'marked-yard.png';
       a.href = canvas.toDataURL();
       a.click();
       setTimeout(() => alert('✅ Saved successfully. Please send it back to us. Thank you!'), 500);
+      redraw();
     }
 
-    // Attach mouse and touch events
+    // Multi-touch gesture controls
+    canvas.addEventListener('touchstart', function (e) {
+      if (e.touches.length === 2) {
+        lastTouches = [...e.touches];
+        isPanning = true;
+      } else {
+        startDraw(e);
+      }
+    });
+
+    canvas.addEventListener('touchmove', function (e) {
+      e.preventDefault();
+      if (e.touches.length === 2 && isPanning) {
+        const dx1 = lastTouches[0].clientX - lastTouches[1].clientX;
+        const dy1 = lastTouches[0].clientY - lastTouches[1].clientY;
+        const dist1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+
+        const dx2 = e.touches[0].clientX - e.touches[1].clientX;
+        const dy2 = e.touches[0].clientY - e.touches[1].clientY;
+        const dist2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+
+        const scaleChange = dist2 / dist1;
+        scale *= scaleChange;
+        originX += (e.touches[0].clientX - lastTouches[0].clientX);
+        originY += (e.touches[0].clientY - lastTouches[0].clientY);
+        lastTouches = [...e.touches];
+        redraw();
+      } else {
+        moveDraw(e);
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', function (e) {
+      if (e.touches.length < 2) isPanning = false;
+      endDraw(e);
+    });
+
+    // Mouse fallback
     canvas.addEventListener('mousedown', startDraw);
     canvas.addEventListener('mousemove', moveDraw);
     canvas.addEventListener('mouseup', endDraw);
-
-    canvas.addEventListener('touchstart', e => { e.preventDefault(); startDraw(e); });
-    canvas.addEventListener('touchmove', e => { e.preventDefault(); moveDraw(e); });
-    canvas.addEventListener('touchend', e => { e.preventDefault(); endDraw(e); });
-
   </script>
-
 </body>
 </html>
