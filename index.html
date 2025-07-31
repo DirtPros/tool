@@ -44,10 +44,10 @@
     const ctx = canvas.getContext('2d');
     const colorPicker = document.getElementById('colorPicker');
     let mode = 'none', drawing = false, startX, startY;
-    let currentFreeform = [], shapes = [];
+    let currentFreeform = [], shapes = [], previewShape = null;
     const img = new Image();
 
-    // Load and resize canvas
+    // Resize canvas
     function resizeCanvas() {
       const ratio = img.width / img.height;
       canvas.width = canvas.clientWidth;
@@ -55,16 +55,14 @@
       redraw();
     }
 
-    img.onload = () => {
-      resizeCanvas();
-    };
-
+    img.onload = resizeCanvas;
     img.src = "https://dirtpros.github.io/tool/yard.jpg";
 
     window.addEventListener("resize", resizeCanvas);
 
     function setMode(m) {
       mode = m;
+      previewShape = null;
     }
 
     function getCanvasPos(e) {
@@ -98,17 +96,12 @@
         ctx.lineWidth = 2;
         ctx.stroke();
       } else {
-        redraw();
-        ctx.strokeStyle = colorPicker.value;
-        ctx.lineWidth = 2;
         if (mode === 'line') {
-          ctx.beginPath();
-          ctx.moveTo(startX, startY);
-          ctx.lineTo(p.x, p.y);
-          ctx.stroke();
+          previewShape = { type: 'line', x1: startX, y1: startY, x2: p.x, y2: p.y, color: colorPicker.value };
         } else if (mode === 'rect') {
-          ctx.strokeRect(startX, startY, p.x - startX, p.y - startY);
+          previewShape = { type: 'rect', x: startX, y: startY, w: p.x - startX, h: p.y - startY, color: colorPicker.value };
         }
+        redraw();
       }
     }
 
@@ -116,35 +109,45 @@
       if (!drawing) return;
       drawing = false;
       const p = getCanvasPos(e);
-      if (mode === 'line') {
-        shapes.push({ type: 'line', x1: startX, y1: startY, x2: p.x, y2: p.y, color: colorPicker.value });
-      } else if (mode === 'rect') {
-        shapes.push({ type: 'rect', x: startX, y: startY, w: p.x - startX, h: p.y - startY, color: colorPicker.value });
+
+      if (mode === 'line' || mode === 'rect') {
+        if (previewShape) {
+          shapes.push(previewShape);
+          previewShape = null;
+        }
       } else if (mode === 'free') {
         shapes.push({ type: 'free', points: [...currentFreeform], color: colorPicker.value });
+        currentFreeform = [];
       }
+
       redraw();
     }
 
     function redraw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      shapes.forEach(s => {
-        ctx.strokeStyle = s.color;
-        ctx.lineWidth = 2;
-        if (s.type === 'line') {
-          ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
-        } else if (s.type === 'rect') {
-          ctx.strokeRect(s.x, s.y, s.w, s.h);
-        } else if (s.type === 'free') {
-          ctx.beginPath();
-          for (let i = 1; i < s.points.length; i++) {
-            ctx.moveTo(s.points[i - 1].x, s.points[i - 1].y);
-            ctx.lineTo(s.points[i].x, s.points[i].y);
-          }
-          ctx.stroke();
+      shapes.forEach(s => drawShape(s));
+      if (previewShape) drawShape(previewShape, true);
+    }
+
+    function drawShape(s, isPreview = false) {
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+
+      if (s.type === 'line') {
+        ctx.moveTo(s.x1, s.y1);
+        ctx.lineTo(s.x2, s.y2);
+        ctx.stroke();
+      } else if (s.type === 'rect') {
+        ctx.strokeRect(s.x, s.y, s.w, s.h);
+      } else if (s.type === 'free') {
+        for (let i = 1; i < s.points.length; i++) {
+          ctx.moveTo(s.points[i - 1].x, s.points[i - 1].y);
+          ctx.lineTo(s.points[i].x, s.points[i].y);
         }
-      });
+        ctx.stroke();
+      }
     }
 
     function undo() {
@@ -168,7 +171,6 @@
     canvas.addEventListener('touchstart', e => { e.preventDefault(); startDraw(e); });
     canvas.addEventListener('touchmove', e => { e.preventDefault(); moveDraw(e); });
     canvas.addEventListener('touchend', e => { e.preventDefault(); endDraw(e); });
-
   </script>
 
 </body>
