@@ -132,25 +132,27 @@
       if (!drawing || (e.touches && e.touches.length > 1)) return;
       const p = getCanvasPos(e);
 
-      redraw(); // redraw previous shapes
-
-      ctx.strokeStyle = colorPicker.value;
-      ctx.lineWidth = 2;
-
       if (mode === 'free') {
         currentFreeform.push({ x: p.x, y: p.y });
         ctx.beginPath();
         const ps = currentFreeform;
         ctx.moveTo(ps[ps.length - 2].x, ps[ps.length - 2].y);
         ctx.lineTo(p.x, p.y);
+        ctx.strokeStyle = colorPicker.value;
+        ctx.lineWidth = 2;
         ctx.stroke();
-      } else if (mode === 'line') {
-        ctx.beginPath();
-        ctx.moveTo(startX, startY);
-        ctx.lineTo(p.x, p.y);
-        ctx.stroke();
-      } else if (mode === 'rect') {
-        ctx.strokeRect(startX, startY, p.x - startX, p.y - startY);
+      } else {
+        redraw();
+        ctx.strokeStyle = colorPicker.value;
+        ctx.lineWidth = 2;
+        if (mode === 'line') {
+          ctx.beginPath();
+          ctx.moveTo(startX, startY);
+          ctx.lineTo(p.x, p.y);
+          ctx.stroke();
+        } else if (mode === 'rect') {
+          ctx.strokeRect(startX, startY, p.x - startX, p.y - startY);
+        }
       }
     }
 
@@ -196,7 +198,8 @@
     }
 
     function saveImage() {
-      ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+      // Temporarily reset transform for export
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       redraw();
       const a = document.createElement('a');
       a.download = 'marked-yard.png';
