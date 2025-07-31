@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Interactive Paver Planner</title>
+  <title>Calibrated Paver Planner</title>
   <style>
     body {
       font-family: sans-serif;
@@ -87,16 +87,17 @@
       mode = newMode;
     }
 
-    function getPos(e) {
+    function getRelativePosition(e) {
+      const rect = canvas.getBoundingClientRect();
       if (e.touches) {
         return {
-          x: e.touches[0].clientX - canvas.getBoundingClientRect().left,
-          y: e.touches[0].clientY - canvas.getBoundingClientRect().top
+          x: e.touches[0].clientX - rect.left,
+          y: e.touches[0].clientY - rect.top
         };
       } else {
         return {
-          x: e.offsetX,
-          y: e.offsetY
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
         };
       }
     }
@@ -104,7 +105,7 @@
     function startDraw(e) {
       if (mode === 'none') return;
       drawing = true;
-      const pos = getPos(e);
+      const pos = getRelativePosition(e);
       startX = pos.x;
       startY = pos.y;
       if (mode === 'free') {
@@ -114,7 +115,7 @@
 
     function moveDraw(e) {
       if (!drawing || mode !== 'free') return;
-      const pos = getPos(e);
+      const pos = getRelativePosition(e);
       currentFreeform.push({ x: pos.x, y: pos.y });
       ctx.beginPath();
       ctx.moveTo(currentFreeform[currentFreeform.length - 2].x, currentFreeform[currentFreeform.length - 2].y);
@@ -127,7 +128,7 @@
     function endDraw(e) {
       if (!drawing) return;
       drawing = false;
-      const pos = getPos(e);
+      const pos = getRelativePosition(e);
 
       if (mode === 'line') {
         shapes.push({ type: 'line', x1: startX, y1: startY, x2: pos.x, y2: pos.y, color: colorPicker.value });
@@ -188,3 +189,4 @@
   </script>
 </body>
 </html>
+
