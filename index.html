@@ -47,7 +47,6 @@
     let currentFreeform = [], shapes = [], previewShape = null;
     const img = new Image();
 
-    // Resize canvas
     function resizeCanvas() {
       const ratio = img.width / img.height;
       canvas.width = canvas.clientWidth;
@@ -57,12 +56,12 @@
 
     img.onload = resizeCanvas;
     img.src = "https://dirtpros.github.io/tool/yard.jpg";
-
     window.addEventListener("resize", resizeCanvas);
 
     function setMode(m) {
       mode = m;
       previewShape = null;
+      redraw();
     }
 
     function getCanvasPos(e) {
@@ -79,7 +78,10 @@
       drawing = true;
       const p = getCanvasPos(e);
       startX = p.x; startY = p.y;
-      if (mode === 'free') currentFreeform = [{ x: p.x, y: p.y }];
+      if (mode === 'free') {
+        currentFreeform = [{ x: p.x, y: p.y }];
+        previewShape = { type: 'free', points: [...currentFreeform], color: colorPicker.value };
+      }
     }
 
     function moveDraw(e) {
@@ -88,36 +90,23 @@
 
       if (mode === 'free') {
         currentFreeform.push({ x: p.x, y: p.y });
-        ctx.beginPath();
-        const ps = currentFreeform;
-        ctx.moveTo(ps[ps.length - 2].x, ps[ps.length - 2].y);
-        ctx.lineTo(p.x, p.y);
-        ctx.strokeStyle = colorPicker.value;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      } else {
-        if (mode === 'line') {
-          previewShape = { type: 'line', x1: startX, y1: startY, x2: p.x, y2: p.y, color: colorPicker.value };
-        } else if (mode === 'rect') {
-          previewShape = { type: 'rect', x: startX, y: startY, w: p.x - startX, h: p.y - startY, color: colorPicker.value };
-        }
-        redraw();
+        previewShape = { type: 'free', points: [...currentFreeform], color: colorPicker.value };
+      } else if (mode === 'line') {
+        previewShape = { type: 'line', x1: startX, y1: startY, x2: p.x, y2: p.y, color: colorPicker.value };
+      } else if (mode === 'rect') {
+        previewShape = { type: 'rect', x: startX, y: startY, w: p.x - startX, h: p.y - startY, color: colorPicker.value };
       }
+
+      redraw();
     }
 
     function endDraw(e) {
       if (!drawing) return;
       drawing = false;
-      const p = getCanvasPos(e);
 
-      if (mode === 'line' || mode === 'rect') {
-        if (previewShape) {
-          shapes.push(previewShape);
-          previewShape = null;
-        }
-      } else if (mode === 'free') {
-        shapes.push({ type: 'free', points: [...currentFreeform], color: colorPicker.value });
-        currentFreeform = [];
+      if (previewShape) {
+        shapes.push(previewShape);
+        previewShape = null;
       }
 
       redraw();
@@ -126,7 +115,7 @@
     function redraw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      shapes.forEach(s => drawShape(s));
+      shapes.forEach(drawShape);
       if (previewShape) drawShape(previewShape, true);
     }
 
@@ -142,9 +131,10 @@
       } else if (s.type === 'rect') {
         ctx.strokeRect(s.x, s.y, s.w, s.h);
       } else if (s.type === 'free') {
-        for (let i = 1; i < s.points.length; i++) {
-          ctx.moveTo(s.points[i - 1].x, s.points[i - 1].y);
-          ctx.lineTo(s.points[i].x, s.points[i].y);
+        const pts = s.points;
+        for (let i = 1; i < pts.length; i++) {
+          ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
+          ctx.lineTo(pts[i].x, pts[i].y);
         }
         ctx.stroke();
       }
@@ -163,11 +153,10 @@
       setTimeout(() => alert('✅ Saved successfully. Please send it back to us. Thank you!'), 500);
     }
 
-    // Attach mouse and touch events
+    // Attach events
     canvas.addEventListener('mousedown', startDraw);
     canvas.addEventListener('mousemove', moveDraw);
     canvas.addEventListener('mouseup', endDraw);
-
     canvas.addEventListener('touchstart', e => { e.preventDefault(); startDraw(e); });
     canvas.addEventListener('touchmove', e => { e.preventDefault(); moveDraw(e); });
     canvas.addEventListener('touchend', e => { e.preventDefault(); endDraw(e); });
